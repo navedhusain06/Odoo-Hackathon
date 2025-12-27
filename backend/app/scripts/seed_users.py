@@ -2,7 +2,7 @@
 from sqlalchemy import select
 
 from app.core.security import hash_password
-from app.db.models import AppUser
+from app.db.models import AppUser, RequestStage
 from app.db.session import SessionLocal
 
 
@@ -29,6 +29,7 @@ def ensure_user(
 def run() -> None:
     db = SessionLocal()
     try:
+        ensure_stages(db)
         ensure_user(
             db,
             email="manager@demo.com",
@@ -57,3 +58,31 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
+
+
+def ensure_stages(db) -> None:
+    existing = {
+        s.name.lower(): s
+        for s in db.execute(select(RequestStage)).scalars().all()
+    }
+    stages = [
+        ("New", 10, False, False),
+        ("In Progress", 20, False, False),
+        ("Repaired", 30, True, False),
+        ("Scrap", 40, True, True),
+    ]
+    created = False
+    for name, seq, is_closed, is_scrap in stages:
+        if name.lower() in existing:
+            continue
+        db.add(
+            RequestStage(
+                name=name,
+                sequence=seq,
+                is_closed=is_closed,
+                is_scrap=is_scrap,
+            )
+        )
+        created = True
+    if created:
+        db.commit()
