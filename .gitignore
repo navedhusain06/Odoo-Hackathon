@@ -1,1 +1,3 @@
 *.pyc
+backend/alembic/versions/90ea2fe1960f_init.py
+backend/alembic/versions/8eb040e2f9f3_init.py
