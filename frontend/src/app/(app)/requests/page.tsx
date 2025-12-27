@@ -1,62 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KanbanBoard } from "@/components/Kanban";
-import { RequestCard, RequestStage } from "@/lib/types";
+import { api } from "@/lib/api";
+import {
+  RequestApiResponse,
+  RequestCard,
+  RequestStage,
+  RequestType,
+} from "@/lib/types";
 
-const initialData: RequestCard[] = [
-  {
-    id: 1,
-    subject: "Leaking oil",
-    requestType: "corrective",
-    stage: "new",
-    equipmentName: "CNC Machine 01",
-    teamName: "Mechanics",
-    assignedTo: null,
-    scheduledDate: null,
-    overdue: false,
-  },
-  {
-    id: 2,
-    subject: "Laptop annual check",
-    requestType: "preventive",
-    stage: "in_progress",
-    equipmentName: "Laptop-IT-44",
-    teamName: "IT Support",
-    assignedTo: { id: 10, name: "Aisha Khan", avatarUrl: "" },
-    scheduledDate: "2024-12-01",
-    overdue: true,
-  },
-  {
-    id: 3,
-    subject: "Hydraulic pressure low",
-    requestType: "corrective",
-    stage: "repaired",
-    equipmentName: "Press-12",
-    teamName: "Mechanics",
-    assignedTo: { id: 11, name: "Luis M", avatarUrl: "" },
-    scheduledDate: "2024-12-15",
-    overdue: false,
-  },
-  {
-    id: 4,
-    subject: "Broken hinge",
-    requestType: "corrective",
-    stage: "scrap",
-    equipmentName: "Gate-03",
-    teamName: "Electricians",
-    assignedTo: { id: 12, name: "Chen Li", avatarUrl: "" },
-    scheduledDate: null,
-    overdue: false,
-  },
-];
+function mapRequest(r: RequestApiResponse): RequestCard {
+  const overdue =
+    !!r.scheduled_start &&
+    ["new", "in_progress"].includes(r.stage) &&
+    new Date(r.scheduled_start) < new Date();
+
+  return {
+    id: r.id,
+    subject: r.subject,
+    requestType: r.request_type,
+    stage: r.stage,
+    scheduledDate: r.scheduled_start,
+    equipmentName: r.equipment_name,
+    teamName: r.team_name,
+    assignedTo: r.assigned_to_id
+      ? { id: r.assigned_to_id, name: r.assigned_to_name || "" }
+      : null,
+    overdue,
+  };
+}
 
 export default function RequestsPage() {
-  const [data, setData] = useState<RequestCard[]>(initialData);
+  const [data, setData] = useState<RequestCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleStageChange = (id: number, stage: RequestStage) => {
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api<RequestApiResponse[]>("/requests");
+      setData(res.map(mapRequest));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load requests");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const handleStageChange = async (id: number, stage: RequestStage) => {
+    // optimistic update
     setData((prev) => prev.map((r) => (r.id === id ? { ...r, stage } : r)));
-    // Later: call API PATCH /requests/{id}/stage
+    try {
+      const updated = await api<RequestApiResponse>(
+        `/requests/${id}/stage`,
+        {
+          method: "PATCH",
+          body: { stage, actual_duration_hours: stage === "repaired" ? 1 : undefined },
+        }
+      );
+      setData((prev) =>
+        prev.map((r) => (r.id === id ? mapRequest(updated) : r))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update stage");
+      // reload to resync
+      void load();
+    }
   };
 
   return (
@@ -68,7 +83,14 @@ export default function RequestsPage() {
           past and not repaired/scrap.
         </p>
       </div>
-      <KanbanBoard requests={data} onStageChange={handleStageChange} />
+      {error ? (
+        <div className="text-sm text-rose-600">{error}</div>
+      ) : null}
+      {loading ? (
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      ) : (
+        <KanbanBoard requests={data} onStageChange={handleStageChange} />
+      )}
     </div>
   );
 }

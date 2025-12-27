@@ -13,6 +13,20 @@ export interface RequestCard {
   overdue: boolean;
 }
 
+export interface RequestApiResponse {
+  id: number;
+  subject: string;
+  request_type: RequestType;
+  stage: RequestStage;
+  equipment_id: number;
+  equipment_name: string;
+  team_id: number;
+  team_name: string;
+  assigned_to_id: number | null;
+  assigned_to_name: string | null;
+  scheduled_start: string | null;
+}
+
 export interface EquipmentItem {
   id: number;
   name: string;

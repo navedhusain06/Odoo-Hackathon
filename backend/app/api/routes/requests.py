@@ -70,7 +70,11 @@ class AssignPayload(BaseModel):
 
 def _stage_map(db: Session) -> dict[str, RequestStage]:
     rows: Sequence[RequestStage] = db.execute(select(RequestStage)).scalars().all()
-    by_name = {r.name.lower(): r for r in rows}
+    by_name: dict[str, RequestStage] = {}
+    for r in rows:
+        key = _normalize_stage_name(r.name)
+        by_name[key] = r
+
     # ensure required stages exist
     missing = [name for name, label in STAGE_NAMES.items() if name not in by_name]
     if missing:
@@ -238,9 +242,7 @@ def create_request(
     db.refresh(req)
 
     team_name = db.execute(
-        select(MaintenanceTeamMember.team.name)
-        .join(MaintenanceTeamMember.team)
-        .where(MaintenanceTeamMember.team_id == req.team_id)
+        select(MaintenanceTeam.name).where(MaintenanceTeam.id == req.team_id)
     ).scalar_one_or_none()
     assigned_name = None
     if req.assigned_to_id:
@@ -389,9 +391,7 @@ def update_stage(
         ).scalar_one_or_none()
 
     team_name = db.execute(
-        select(MaintenanceTeamMember.team.name)
-        .join(MaintenanceTeamMember.team)
-        .where(MaintenanceTeamMember.team_id == req.team_id)
+        select(MaintenanceTeam.name).where(MaintenanceTeam.id == req.team_id)
     ).scalar_one_or_none()
 
     return RequestOut(
