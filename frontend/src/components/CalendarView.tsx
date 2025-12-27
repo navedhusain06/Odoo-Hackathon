@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { Calendar, dayjsLocalizer, Event, SlotInfo } from "react-big-calendar";
 import dayjs from "dayjs";
-import "react-big-calendar/lib/css/react-big-calendar.css";
 
 import { Button } from "@/components/ui/button";
 import {
