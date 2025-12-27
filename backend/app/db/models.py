@@ -9,7 +9,9 @@ class AppUser(Base):
     __tablename__ = "app_user"
     id = Column(Integer, primary_key=True)
     full_name = Column(String, nullable=False)
-    email = Column(String, unique=True, nullable=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="user")  # user | technician | manager
     avatar_url = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

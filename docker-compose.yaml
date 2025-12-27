@@ -18,10 +18,25 @@ services:
       - .env
     ports:
       - "8000:8000"
+    command: ["/bin/sh", "/app/entrypoint.sh"]
     volumes:
       - ./backend:/app
     depends_on:
       - db
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
