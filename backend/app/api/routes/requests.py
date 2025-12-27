@@ -26,12 +26,8 @@ STAGE_NAMES = {
     "scrap": "Scrap",
 }
 
-ALLOWED_TRANSITIONS = {
-    "new": {"in_progress", "scrap"},
-    "in_progress": {"repaired", "scrap"},
-    "repaired": set(),
-    "scrap": set(),
-}
+# For hackathon UX (Kanban drag/drop), allow moving between any stages.
+# Business rules are enforced below (team-only pickup, duration on repaired, scrap side-effect).
 
 
 class RequestOut(BaseModel):
@@ -108,6 +104,7 @@ def _is_team_member(db: Session, team_id: int, user_id: int) -> bool:
 def list_requests(
     db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)
 ):
+    stages = _stage_map(db)
     # Visibility rules:
     # manager -> all
     # technician -> assigned_to = self OR (stage=new and team member)
@@ -135,9 +132,7 @@ def list_requests(
             or_(
                 MaintenanceRequest.assigned_to_id == current_user.id,
                 and_(
-                    MaintenanceRequest.stage_id.in_(
-                        select(RequestStage.id).where(RequestStage.name == STAGE_NAMES["new"])
-                    ),
+                    MaintenanceRequest.stage_id == stages["new"].id,
                     MaintenanceRequest.team_id.in_(
                         select(MaintenanceTeamMember.team_id).where(
                             MaintenanceTeamMember.user_id == current_user.id
@@ -341,15 +336,7 @@ def update_stage(
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    # resolve current/target
-    current_stage = _normalize_stage_name(
-        db.execute(select(RequestStage.name).where(RequestStage.id == req.stage_id)).scalar_one()
-    )
     target_stage = payload.stage
-    if target_stage not in ALLOWED_TRANSITIONS.get(current_stage, set()) and not (
-        target_stage == "scrap"
-    ):
-        raise HTTPException(status_code=400, detail="Invalid transition")
 
     # RBAC: manager all; tech must be member of team; user cannot change stage
     if current_user.role == "technician" and not _is_team_member(
@@ -365,10 +352,12 @@ def update_stage(
 
     # in_progress requires assignment to team member
     if target_stage == "in_progress":
-        if not req.assigned_to_id:
+        # Managers can move to in_progress even if they are not in the team and without auto-assign.
+        if not req.assigned_to_id and current_user.role != "manager":
             req.assigned_to_id = current_user.id
-        if not _is_team_member(db, req.team_id, req.assigned_to_id):
-            raise HTTPException(status_code=400, detail="Assignee not in team")
+        if req.assigned_to_id and current_user.role != "manager":
+            if not _is_team_member(db, req.team_id, req.assigned_to_id):
+                raise HTTPException(status_code=400, detail="Assignee not in team")
 
     # scrap side-effect
     if target_stage == "scrap":
