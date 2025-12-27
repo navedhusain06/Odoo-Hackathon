@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gearguard}
+      POSTGRES_USER: ${POSTGRES_USER:-gearguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gearguard}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    image: gearguard-backend
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
